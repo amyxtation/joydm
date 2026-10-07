@@ -1,7 +1,7 @@
 import { config } from '../config.js';
 import { get, run } from '../database/index.js';
 import { hashPassword, verifyPassword, validatePassword, validateUsername } from './password.js';
-import { createSession, deleteSession, cookieOptions } from './sessions.js';
+import { createSession, deleteSession, cookieOptionsFor } from './sessions.js';
 import { serializeUser } from '../middleware/auth.js';
 import { createRateLimiter } from '../middleware/rateLimit.js';
 import { ok, badRequest, unauthorized, tooMany } from '../utils/http.js';
@@ -13,8 +13,11 @@ function userCount() {
   return get('SELECT COUNT(*) AS n FROM users').n;
 }
 
-function setSessionCookie(reply, sessionId) {
-  reply.setCookie(config.cookieName, sessionId, { ...cookieOptions, maxAge: Math.floor(config.sessionTtlMs / 1000) });
+function setSessionCookie(request, reply, sessionId) {
+  reply.setCookie(config.cookieName, sessionId, {
+    ...cookieOptionsFor(request),
+    maxAge: Math.floor(config.sessionTtlMs / 1000),
+  });
 }
 
 export async function authRoutes(app) {
@@ -40,7 +43,7 @@ export async function authRoutes(app) {
     run("UPDATE users SET last_login_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?", [userId]);
 
     const session = createSession(userId, request.headers['user-agent']);
-    setSessionCookie(reply, session.id);
+    setSessionCookie(request, reply, session.id);
     logger.info('admin created via setup', { username });
     return ok(reply, serializeUser(get('SELECT * FROM users WHERE id = ?', [userId])), 201);
   });
@@ -69,14 +72,14 @@ export async function authRoutes(app) {
     limiter.reset(ip);
     run("UPDATE users SET last_login_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?", [row.id]);
     const session = createSession(row.id, request.headers['user-agent']);
-    setSessionCookie(reply, session.id);
+    setSessionCookie(request, reply, session.id);
     logger.info('login', { username: row.username, ip });
     return ok(reply, serializeUser(get('SELECT * FROM users WHERE id = ?', [row.id])));
   });
 
   app.post('/api/auth/logout', async (request, reply) => {
     if (request.sessionId) deleteSession(request.sessionId);
-    reply.clearCookie(config.cookieName, { ...cookieOptions, maxAge: 0 });
+    reply.clearCookie(config.cookieName, { ...cookieOptionsFor(request), maxAge: 0 });
     return ok(reply, { loggedOut: true });
   });
 

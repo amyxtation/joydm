@@ -81,6 +81,75 @@ npm start         # Fastify serves the API *and* the built SPA on :8080
 
 ---
 
+## Running on your own server
+
+JoyDM needs a **long-running process**, a **writable disk** for SQLite, and
+**access to your music files**. That rules out static/serverless hosting
+(Vercel, Netlify, GitHub Pages, Cloudflare Pages): those can serve the frontend,
+but no backend exists there, so every `/api/*` call returns 404. A normal
+machine — a home PC, a mini PC, a Raspberry Pi or a VPS — is the right home for
+it.
+
+### Setup on the server
+
+```bash
+# 1. Get the code
+git clone https://github.com/amyxtation/joydm.git
+cd joydm
+
+# 2. Check Node (22.5+ required — JoyDM uses the built-in node:sqlite)
+node --version
+npm install
+
+# 3. Configure: create .env and set a fixed SESSION_SECRET
+cp .env.example .env
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# 4. Build the frontend once, then start
+npm run build
+npm start
+```
+
+Then open `http://<server-ip>:8080` from any device on the network, create your
+admin account on the first-run screen, and scan your library.
+
+To update later: `git pull && npm install && npm run build`, then restart.
+
+### Getting your music onto the server
+
+The library is deliberately **not** in the repository — audio is gitignored, so
+you will not find your tracks after cloning. The repo ships an empty
+`music-library/` folder; copy your files into it yourself:
+
+```bash
+# from your PC (Linux/macOS)
+scp -r ~/Music/* user@server:/path/to/joydm/music-library/
+
+# from Windows (mirrors a folder, including subfolders)
+robocopy "C:\Users\you\Music" "\\server\share\joydm\music-library" /E
+```
+
+SMB/NFS shares and mounted NAS folders work too — point `MUSIC_LIBRARY_PATH` at
+whatever path you mount. Then press **Scan Library** in the UI.
+
+### Notes for a LAN deployment
+
+- **Firewall:** open the port (8080 by default) on the server so other devices
+  can reach it.
+- **`APP_ENV=production` is optional.** If you use it, you must also set a fixed
+  `SESSION_SECRET`, otherwise the server refuses to start. Leaving it as
+  `development` is perfectly fine on a trusted LAN.
+- **Plain HTTP works.** The session cookie's `Secure` flag follows the request
+  scheme, so `http://server:8080` logs in normally, while a deployment behind
+  HTTPS gets `Secure` cookies automatically. Override with `COOKIE_SECURE` only
+  if TLS terminates somewhere the app cannot see.
+- **Want access from outside your network?** Put a reverse proxy or tunnel in
+  front of it — the bundled `Caddyfile` gives you automatic HTTPS on a VPS, and
+  a Cloudflare Tunnel or Tailscale does the same for a machine at home without
+  opening any ports.
+
+---
+
 ## Playback
 
 **Repeat** has three explicit modes, shown on the repeat button in the player

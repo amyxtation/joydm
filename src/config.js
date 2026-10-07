@@ -64,6 +64,15 @@ export const config = {
   sessionTtlMs: num('SESSION_TTL_HOURS', 24 * 30) * 60 * 60 * 1000,
   cookieName: 'joydm_session',
 
+  /**
+   * Session cookie `Secure` flag.
+   * `undefined` (the default) means "match the request scheme", which is what
+   * you want: HTTPS deployments get Secure cookies, while a plain-HTTP LAN
+   * deployment still works instead of silently dropping the cookie.
+   * Set COOKIE_SECURE=true/false to force it.
+   */
+  cookieSecure: process.env.COOKIE_SECURE === undefined ? undefined : bool('COOKIE_SECURE', false),
+
   logLevel: str('LOG_LEVEL', 'info'),
 
   /** When true, library + streaming require an authenticated user (PRD §65). */

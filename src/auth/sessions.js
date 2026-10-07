@@ -43,9 +43,20 @@ export function sessionCountFor(userId) {
   return all('SELECT id FROM sessions WHERE user_id = ?', [userId]).length;
 }
 
-export const cookieOptions = {
-  path: '/',
-  httpOnly: true,
-  sameSite: 'lax',
-  secure: config.isProduction,
-};
+/**
+ * Cookie attributes for the session.
+ *
+ * `Secure` is derived from the actual request scheme rather than from
+ * APP_ENV: a browser silently discards a `Secure` cookie sent over plain HTTP,
+ * so a LAN deployment at http://host:8080 would look like a failed login.
+ * Set COOKIE_SECURE to override.
+ */
+export function cookieOptionsFor(request) {
+  const secure = config.cookieSecure ?? request?.protocol === 'https';
+  return {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure,
+  };
+}
