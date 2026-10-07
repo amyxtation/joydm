@@ -1,0 +1,43 @@
+# JoyDM systemd unit — keeps the server running after you close SSH, and
+# starts it automatically on boot.
+#
+# 1. Edit the paths and user below (WorkingDirectory = where you cloned JoyDM).
+# 2. Confirm the node path on THIS machine with:  which node
+#    (nvm users: systemd cannot see nvm's node — use the full path it prints,
+#     e.g. /home/you/.nvm/versions/node/v24.9.0/bin/node, or install Node
+#     system-wide so it lives in /usr/bin/node.)
+# 3. Install:
+#      sudo cp deploy/joydm.service /etc/systemd/system/joydm.service
+#      sudo systemctl daemon-reload
+#      sudo systemctl enable --now joydm
+# 4. Check it:
+#      systemctl status joydm
+#      journalctl -u joydm -f
+
+[Unit]
+Description=JoyDM music streaming server
+Documentation=https://github.com/amyxtation/joydm
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# --- EDIT THESE -------------------------------------------------------------
+User=joydm
+WorkingDirectory=/opt/joydm
+ExecStart=/usr/bin/node src/server.js
+# ---------------------------------------------------------------------------
+
+# JoyDM reads .env itself (from the project root), so EnvironmentFile is
+# optional — use it only if you prefer to keep secrets outside the checkout.
+#EnvironmentFile=/opt/joydm/.env
+
+Restart=on-failure
+RestartSec=5
+
+# Graceful shutdown on SIGTERM is implemented by the app, so allow a moment.
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

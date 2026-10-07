@@ -115,6 +115,42 @@ admin account on the first-run screen, and scan your library.
 
 To update later: `git pull && npm install && npm run build`, then restart.
 
+### Keeping it running
+
+`npm start` in an SSH session dies the moment you close the terminal (the
+process receives SIGHUP). JoyDM *is* the server, so it has to keep running.
+
+**Proper way — systemd (Linux).** A unit file is included:
+
+```bash
+# edit User / WorkingDirectory / ExecStart in the file first
+# (check the node path with: which node)
+sudo cp deploy/joydm.service /etc/systemd/system/joydm.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now joydm
+
+systemctl status joydm          # is it up?
+journalctl -u joydm -f          # follow the logs
+```
+
+It starts on boot and restarts automatically if it crashes. After changing
+code: `git pull && npm install && npm run build && sudo systemctl restart joydm`.
+
+> If you installed Node with **nvm**, systemd cannot see it. Use the full path
+> from `which node` in `ExecStart`, or install Node system-wide so it lives in
+> `/usr/bin/node`.
+
+**Quick way — a detachable terminal.** Fine for testing, not for production:
+
+```bash
+tmux new -s joydm      # then run: npm start    (detach with Ctrl-b, then d)
+tmux attach -t joydm   # come back later
+```
+
+**Other options:** `docker compose up -d` (uses the bundled compose file and
+`restart: unless-stopped`), `pm2 start src/server.js`, or on Windows a service
+wrapper such as NSSM or Task Scheduler.
+
 ### Getting your music onto the server
 
 The library is deliberately **not** in the repository — audio is gitignored, so
