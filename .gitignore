@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+.env
+.env.local
+
+# Runtime data (keep the folders, ignore contents)
+data/*
+!data/.gitkeep
+logs/*
+!logs/.gitkeep
+music-library/*
+!music-library/.gitkeep
+
+# Vite
+.vite/
+
+# Local agent state (taste/preferences) — machine-local, not project source
+.commandcode/
+

@@ -1,0 +1,14 @@
+node_modules
+dist
+data
+logs
+shots
+music-library
+test
+.git
+.gitignore
+.commandcode
+*.md
+.env
+.env.local
+cookies.txt

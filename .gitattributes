@@ -1,0 +1,22 @@
+# Normalise line endings in the repository so the project behaves identically
+# on Windows dev machines and Linux containers.
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets are never touched.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.mp3 binary
+*.flac binary
+*.wav binary
+*.m4a binary
+*.ogg binary

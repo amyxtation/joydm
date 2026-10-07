@@ -1,0 +1,120 @@
+/* JoyDM design tokens — dark-first, light supported. */
+:root {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-pill: 999px;
+
+  --sidebar-w: 248px;
+  --player-h: 84px;
+  --mobilenav-h: 60px;
+  --topbar-h: 64px;
+
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 320ms;
+
+  --z-content: 1;
+  --z-player: 40;
+  --z-drawer: 50;
+  --z-scrim: 55;
+  --z-mobilenav: 60;
+  --z-sheet: 70;
+  --z-toast: 90;
+}
+
+[data-theme="dark"] {
+  --bg: #0a0a0f;
+  --bg-gradient: radial-gradient(1200px 600px at 15% -10%, rgba(124, 92, 255, 0.16), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(255, 92, 138, 0.1), transparent 55%);
+  --surface: #121219;
+  --surface-2: #191922;
+  --surface-3: #21212c;
+  --surface-hover: #1f1f2a;
+  --elevated: #16161f;
+  --sidebar-bg: rgba(12, 12, 18, 0.86);
+  --player-bg: rgba(16, 16, 23, 0.82);
+
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+
+  --text: #f3f3f8;
+  --text-muted: #a2a2b4;
+  --text-dim: #6e6e80;
+
+  --accent: #8b6cff;
+  --accent-hover: #9d83ff;
+  --accent-soft: rgba(139, 108, 255, 0.16);
+  --accent-2: #ff5c8a;
+  --accent-grad: linear-gradient(135deg, #7c5cff 0%, #b45cff 45%, #ff5c8a 100%);
+  --accent-contrast: #ffffff;
+
+  --success: #3ddc97;
+  --warning: #ffcb5c;
+  --danger: #ff5c6c;
+  --focus: #b8a6ff;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.6);
+  --shadow-accent: 0 8px 30px rgba(124, 92, 255, 0.35);
+
+  --scrollbar: rgba(255, 255, 255, 0.14);
+}
+
+[data-theme="light"] {
+  --bg: #f6f6fa;
+  --bg-gradient: radial-gradient(1200px 600px at 10% -10%, rgba(124, 92, 255, 0.14), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(255, 92, 138, 0.1), transparent 55%);
+  --surface: #ffffff;
+  --surface-2: #f1f1f6;
+  --surface-3: #e8e8f1;
+  --surface-hover: #eeeef5;
+  --elevated: #ffffff;
+  --sidebar-bg: rgba(255, 255, 255, 0.86);
+  --player-bg: rgba(255, 255, 255, 0.86);
+
+  --border: rgba(16, 16, 32, 0.09);
+  --border-strong: rgba(16, 16, 32, 0.16);
+
+  --text: #14141c;
+  --text-muted: #55556a;
+  --text-dim: #8a8a9c;
+
+  --accent: #6d4aff;
+  --accent-hover: #5c39f0;
+  --accent-soft: rgba(109, 74, 255, 0.1);
+  --accent-2: #ec3d78;
+  --accent-grad: linear-gradient(135deg, #6d4aff 0%, #a24bff 45%, #ec3d78 100%);
+  --accent-contrast: #ffffff;
+
+  --success: #109c6a;
+  --warning: #c98a00;
+  --danger: #e0334c;
+  --focus: #6d4aff;
+
+  --shadow-sm: 0 1px 2px rgba(20, 20, 40, 0.06);
+  --shadow-md: 0 8px 24px rgba(20, 20, 40, 0.1);
+  --shadow-lg: 0 20px 60px rgba(20, 20, 40, 0.16);
+  --shadow-accent: 0 8px 30px rgba(109, 74, 255, 0.25);
+
+  --scrollbar: rgba(20, 20, 40, 0.18);
+}

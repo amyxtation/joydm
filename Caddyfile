@@ -1,0 +1,41 @@
+# Caddy: HTTPS termination + reverse proxy in front of the JoyDM container
+# (PRD §7 / §8.2). Caddy obtains and renews TLS certificates automatically.
+#
+# Set JOYDM_HOST (and ACME_EMAIL) in the environment or a .env file next to
+# docker-compose.yml. For a real domain point its DNS A/AAAA record at this host.
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$JOYDM_HOST:localhost} {
+	encode zstd gzip
+
+	# Long-lived caching for content-hashed build assets; never cache HTML.
+	@hashedAssets path /assets/*
+	header @hashedAssets Cache-Control "public, max-age=31536000, immutable"
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	reverse_proxy joydm:8080 {
+		# Pass the real client IP through for login rate limiting.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-Host {host}
+
+		# Audio streaming must not be buffered by the proxy.
+		flush_interval -1
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}
