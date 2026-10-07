@@ -197,6 +197,7 @@ async function bootstrap() {
   mountShell();
   bindKeyboard();
   bindHistoryRecording();
+  app.bindPlayerFeedback();
 
   document.addEventListener('click', (event) => app.handleAction(event));
   document.addEventListener('contextmenu', (event) => {

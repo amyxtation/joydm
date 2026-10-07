@@ -104,6 +104,8 @@
 
 .segmented {
   display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
   padding: 3px;
   border-radius: var(--radius-pill);
   background: var(--surface-2);

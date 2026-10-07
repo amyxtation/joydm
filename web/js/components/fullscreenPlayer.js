@@ -1,10 +1,9 @@
 import { app } from '../app.js';
-import { player } from '../core/player.js';
+import { player, REPEAT_LABELS } from '../core/player.js';
 import { icon } from '../core/icons.js';
 import { formatTime, gradientFor } from '../core/utils.js';
 import { artworkMarkup } from '../ui/artwork.js';
-
-const REPEAT_LABEL = { off: 'Repeat off', all: 'Repeat all', one: 'Repeat one' };
+import { openRepeatMenu } from '../ui/repeatMenu.js';
 
 export function openFullscreenPlayer() {
   if (!player.state.currentTrack) return;
@@ -44,7 +43,7 @@ export function openFullscreenPlayer() {
           <span class="icon-pause">${icon('pause', { fill: true })}</span>
         </button>
         <button class="icon-btn" type="button" data-ctl="next" aria-label="Next track">${icon('next', { fill: true })}</button>
-        <button class="icon-btn" type="button" data-ctl="repeat" aria-label="Repeat off" aria-pressed="false">${icon('repeat')}</button>
+        <button class="icon-btn" type="button" data-ctl="repeat" aria-label="Repeat: no repeat" aria-haspopup="menu">${icon('repeat')}</button>
       </div>
       <div class="row row--between">
         <button class="icon-btn" type="button" data-ctl="fav" aria-label="Add to favorites">${icon('heart')}</button>
@@ -91,7 +90,7 @@ export function openFullscreenPlayer() {
   node.querySelector('[data-ctl="prev"]').addEventListener('click', () => player.previous());
   node.querySelector('[data-ctl="next"]').addEventListener('click', () => player.next());
   refs.shuffle.addEventListener('click', () => player.toggleShuffle());
-  refs.repeat.addEventListener('click', () => player.cycleRepeat());
+  refs.repeat.addEventListener('click', () => openRepeatMenu(refs.repeat, { placement: 'above' }));
   refs.mute.addEventListener('click', () => player.toggleMute());
   refs.fav.addEventListener('click', () => {
     const track = player.state.currentTrack;
@@ -131,8 +130,9 @@ export function openFullscreenPlayer() {
     node.classList.toggle('is-playing', state.isPlaying);
     refs.play.setAttribute('aria-label', state.isPlaying ? 'Pause' : 'Play');
     refs.shuffle.setAttribute('aria-pressed', String(state.shuffle));
-    refs.repeat.setAttribute('aria-pressed', String(state.repeatMode !== 'off'));
-    refs.repeat.setAttribute('aria-label', REPEAT_LABEL[state.repeatMode]);
+    refs.repeat.classList.toggle('is-active', state.repeatMode !== 'off');
+    refs.repeat.setAttribute('aria-label', `Repeat: ${REPEAT_LABELS[state.repeatMode]}`);
+    refs.repeat.setAttribute('title', REPEAT_LABELS[state.repeatMode]);
     refs.repeat.innerHTML = icon(state.repeatMode === 'one' ? 'repeatOne' : 'repeat');
 
     const fav = app.isFavorite(track.id);

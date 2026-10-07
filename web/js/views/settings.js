@@ -1,6 +1,7 @@
 import { app } from '../app.js';
 import { api } from '../core/api.js';
 import { icon } from '../core/icons.js';
+import { REPEAT_LABELS, REPEAT_MODES } from '../core/player.js';
 import { escapeHtml, formatBytes, formatLongDuration, relativeDate } from '../core/utils.js';
 import { toast } from '../ui/toast.js';
 
@@ -28,11 +29,30 @@ export async function renderSettings(root, ctx) {
       </section>
 
       <section class="settings-group">
-        <div class="settings-group__head"><h3>Playback</h3><p>How JoyDM behaves when you start listening.</p></div>
+        <div class="settings-group__head"><h3>Playback</h3><p>What happens when a track finishes.</p></div>
         <div class="setting">
-          <div><div class="setting__label">Autoplay</div><div class="setting__desc">Start playing as soon as a queue is loaded.</div></div>
+          <div>
+            <div class="setting__label">Keep playing</div>
+            <div class="setting__desc">When a track ends, continue automatically with the next one in the queue. Turn this off to stop after every track.</div>
+          </div>
           <div class="setting__control">
             <label class="check"><input type="checkbox" data-slot="autoplay" ${settings.autoplay !== false ? 'checked' : ''} /> <span class="muted">Enabled</span></label>
+          </div>
+        </div>
+        <div class="setting">
+          <div>
+            <div class="setting__label">Repeat</div>
+            <div class="setting__desc">No repeat stops at the end of the queue · Repeat all loops the whole queue · Repeat one loops the current track.</div>
+          </div>
+          <div class="setting__control">
+            <div class="segmented" data-slot="repeat">
+              ${REPEAT_MODES.map(
+                (mode) =>
+                  `<button type="button" data-action="set-repeat" data-value="${mode}" class="${
+                    app.player.state.repeatMode === mode ? 'is-active' : ''
+                  }">${REPEAT_LABELS[mode]}</button>`,
+              ).join('')}
+            </div>
           </div>
         </div>
         <div class="setting">
@@ -93,12 +113,23 @@ export async function renderSettings(root, ctx) {
         btn.classList.toggle('is-active', btn.dataset.value === trigger.dataset.value);
       });
     },
+    'set-repeat': (trigger) => {
+      const mode = app.player.setRepeatMode(trigger.dataset.value);
+      root.querySelectorAll('[data-slot="repeat"] button').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.dataset.value === mode);
+      });
+      api.settings.save({ repeatMode: mode }).catch(() => {});
+      toast(`Repeat: ${REPEAT_LABELS[mode]}.`);
+    },
   });
 
   const autoplay = root.querySelector('[data-slot="autoplay"]');
   autoplay.addEventListener('change', async () => {
-    await api.settings.save({ autoplay: autoplay.checked });
-    app.player.state.autoplay = autoplay.checked;
-    toast(autoplay.checked ? 'Autoplay on.' : 'Autoplay off.');
+    const enabled = autoplay.checked;
+    app.player.setAutoAdvance(enabled);
+    await api.settings.save({ autoplay: enabled }).catch(() => {});
+    toast(
+      enabled ? 'Tracks will continue playing automatically.' : 'Playback will stop at the end of each track.',
+    );
   });
 }

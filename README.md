@@ -81,6 +81,32 @@ npm start         # Fastify serves the API *and* the built SPA on :8080
 
 ---
 
+## Playback
+
+**Repeat** has three explicit modes, shown on the repeat button in the player
+(and available in the fullscreen player and in Settings → Playback):
+
+| Mode | Behaviour |
+| --- | --- |
+| **No repeat** | Plays the queue once, then stops |
+| **Repeat all (loop)** | Loops the whole queue |
+| **Repeat one track** | Loops the current track |
+
+**Keep playing** (Settings → Playback, on by default) controls whether finishing
+a track automatically advances to the next one. Turn it off to stop at the end
+of every track.
+
+Other player behaviour worth knowing:
+
+- The queue button shows how many tracks are queued, so it is obvious whether
+  you are playing a single track or a whole list.
+- If a file is missing or the browser cannot decode it, the track is reported
+  and **skipped** rather than silently ending the queue. A notice appears when a
+  queue finishes.
+- Playback is never interrupted by in-app navigation.
+
+---
+
 ## Configuration
 
 Copy `.env.example` to `.env`. All values are optional in development.

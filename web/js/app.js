@@ -52,13 +52,15 @@ export const app = {
 
   /** Loads library-wide data needed by the shell (stats, playlists, favorites). */
   async loadShared() {
-    const [stats, playlists, favoriteTracks] = await Promise.all([
+    const [stats, playlists, favoriteTracks, settings] = await Promise.all([
       api.library.stats().catch(() => null),
       api.playlists.list().catch(() => []),
       api.favorites.list().catch(() => []),
+      api.settings.get().catch(() => null),
     ]);
     const favoriteIds = favoriteTracks.map((t) => t.id);
     favoriteTracks.forEach((track) => this.indexTrack(track));
+    if (settings) this.applySettings(settings);
     store.set({
       stats,
       playlists,
@@ -415,6 +417,25 @@ export const app = {
     store.update('user', null);
     player.pause();
     this.router?.navigate('/login');
+  },
+
+  /** Applies server-side playback preferences to the player. */
+  applySettings(settings) {
+    if (settings.autoplay != null) player.setAutoAdvance(settings.autoplay !== false);
+  },
+
+  /**
+   * Surfaces playback problems instead of failing silently — a blocked
+   * autoplay or an unreadable file used to stop the queue with no feedback.
+   */
+  bindPlayerFeedback() {
+    player.on('error', ({ message, track, willSkip }) => {
+      const suffix = willSkip && track ? ` Skipping “${track.title}”.` : '';
+      toast(`${message}${suffix}`, { type: 'error', duration: 5200 });
+    });
+    player.on('queueend', ({ reason }) => {
+      if (reason === 'end') toast('End of queue.', { type: 'info', duration: 2400 });
+    });
   },
 
   async scanLibrary({ force = false } = {}) {

@@ -1,10 +1,9 @@
 import { app } from '../app.js';
-import { player } from '../core/player.js';
+import { player, REPEAT_LABELS } from '../core/player.js';
 import { icon } from '../core/icons.js';
 import { formatTime } from '../core/utils.js';
 import { artworkMarkup } from '../ui/artwork.js';
-
-const REPEAT_LABEL = { off: 'Repeat off', all: 'Repeat all', one: 'Repeat one' };
+import { openRepeatMenu } from '../ui/repeatMenu.js';
 
 export function mountPlayerBar() {
   const bar = document.getElementById('player-bar');
@@ -34,7 +33,7 @@ export function mountPlayerBar() {
             <span class="icon-pause">${icon('pause', { fill: true })}</span>
           </button>
           <button class="icon-btn" type="button" data-ctl="next" aria-label="Next track">${icon('next', { fill: true })}</button>
-          <button class="icon-btn" type="button" data-ctl="repeat" aria-label="Repeat off" aria-pressed="false">${icon('repeat')}</button>
+          <button class="icon-btn" type="button" data-ctl="repeat" aria-label="Repeat: no repeat" aria-haspopup="menu">${icon('repeat')}</button>
         </div>
         <div class="progress">
           <span class="progress__time" data-slot="current">0:00</span>
@@ -44,7 +43,9 @@ export function mountPlayerBar() {
       </div>
 
       <div class="player-right">
-        <button class="icon-btn" type="button" data-action="open-queue" aria-label="Queue">${icon('queue')}</button>
+        <button class="icon-btn queue-btn" type="button" data-action="open-queue" aria-label="Queue">
+          ${icon('queue')}<span class="count-badge" data-slot="queue-count" hidden></span>
+        </button>
         <div class="volume">
           <button class="icon-btn icon-btn--sm" type="button" data-ctl="mute" aria-label="Mute">${icon('volume')}</button>
           <input class="range" type="range" min="0" max="1" value="0.8" step="0.01" data-ctl="volume" aria-label="Volume" />
@@ -65,13 +66,14 @@ export function mountPlayerBar() {
       duration: bar.querySelector('[data-slot="duration"]'),
       mute: bar.querySelector('[data-ctl="mute"]'),
       volume: bar.querySelector('[data-ctl="volume"]'),
+      queueCount: bar.querySelector('[data-slot="queue-count"]'),
     };
 
     refs.play.addEventListener('click', () => player.toggle());
     bar.querySelector('[data-ctl="prev"]').addEventListener('click', () => player.previous());
     bar.querySelector('[data-ctl="next"]').addEventListener('click', () => player.next());
     refs.shuffle.addEventListener('click', () => player.toggleShuffle());
-    refs.repeat.addEventListener('click', () => player.cycleRepeat());
+    refs.repeat.addEventListener('click', () => openRepeatMenu(refs.repeat, { placement: 'above' }));
     refs.mute.addEventListener('click', () => player.toggleMute());
 
     refs.seek.addEventListener('input', () => {
@@ -134,9 +136,16 @@ export function mountPlayerBar() {
 
     refs.play.setAttribute('aria-label', state.isPlaying ? 'Pause' : 'Play');
     refs.shuffle.setAttribute('aria-pressed', String(state.shuffle));
-    refs.repeat.setAttribute('aria-pressed', String(state.repeatMode !== 'off'));
-    refs.repeat.setAttribute('aria-label', REPEAT_LABEL[state.repeatMode]);
+    refs.repeat.classList.toggle('is-active', state.repeatMode !== 'off');
+    refs.repeat.setAttribute('aria-label', `Repeat: ${REPEAT_LABELS[state.repeatMode]}`);
+    refs.repeat.setAttribute('title', REPEAT_LABELS[state.repeatMode]);
     refs.repeat.innerHTML = icon(state.repeatMode === 'one' ? 'repeatOne' : 'repeat');
+
+    const queueCount = state.queue.length;
+    if (refs.queueCount) {
+      refs.queueCount.textContent = queueCount > 99 ? '99+' : String(queueCount);
+      refs.queueCount.hidden = queueCount === 0;
+    }
 
     const duration = state.duration || 0;
     const ratio = duration ? (state.currentTime / duration) * 100 : 0;

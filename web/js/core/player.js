@@ -15,8 +15,29 @@ import { USE_MOCK } from './api.js';
 
 export const REPEAT_MODES = ['off', 'all', 'one'];
 
+export const REPEAT_LABELS = {
+  off: 'No repeat',
+  all: 'Repeat all',
+  one: 'Repeat one',
+};
+
 export function streamUrl(trackId) {
   return `/api/stream/${trackId}`;
+}
+
+function describeMediaError(error) {
+  switch (error?.code) {
+    case 1:
+      return 'Playback was aborted.';
+    case 2:
+      return 'A network error interrupted the stream.';
+    case 3:
+      return 'The audio file could not be decoded.';
+    case 4:
+      return 'The audio file could not be loaded — it may be missing or in a format this browser cannot play.';
+    default:
+      return 'Playback failed.';
+  }
 }
 
 class Player {
@@ -43,6 +64,7 @@ class Player {
       muted: persisted.read('muted', false),
       shuffle: persisted.read('shuffle', false),
       repeatMode: persisted.read('repeat', 'off'),
+      autoAdvance: persisted.read('autoAdvance', true),
       currentTime: 0,
       duration: 0,
       simulated: this.simulated,
@@ -54,6 +76,16 @@ class Player {
     this._listeners = new Set();
     this._trackListeners = new Set();
     this._endedListeners = new Set();
+    this._errorListeners = new Set();
+    this._queueEndListeners = new Set();
+    /** Distinct tracks that failed to load, so a run of broken files cannot loop. */
+    this._failedTrackIds = new Set();
+    /** Guards against duplicate/stale `error` events for the same load. */
+    this._handledErrorFor = null;
+    this._currentLoadStarted = false;
+    this._pendingFailureEcho = false;
+    /** Incremented per load; lets a stale play() rejection be ignored. */
+    this._loadGeneration = 0;
     this._lastTick = 0;
     this._timer = null;
 
@@ -71,12 +103,26 @@ class Player {
   }
 
   on(event, fn) {
-    if (event === 'trackchange') this._trackListeners.add(fn);
-    if (event === 'ended') this._endedListeners.add(fn);
-    return () => {
-      this._trackListeners.delete(fn);
-      this._endedListeners.delete(fn);
+    const sets = {
+      trackchange: this._trackListeners,
+      ended: this._endedListeners,
+      error: this._errorListeners,
+      queueend: this._queueEndListeners,
     };
+    const set = sets[event];
+    if (!set || typeof fn !== 'function') return () => {};
+    set.add(fn);
+    return () => set.delete(fn);
+  }
+
+  _emitTo(set, payload) {
+    for (const fn of set) {
+      try {
+        fn(payload);
+      } catch {
+        /* a broken listener must not stop playback */
+      }
+    }
   }
 
   _emit() {
@@ -97,8 +143,16 @@ class Player {
     a.addEventListener('play', () => this._set({ isPlaying: true }));
     a.addEventListener('pause', () => this._set({ isPlaying: false }));
     a.addEventListener('waiting', () => this._set({ isBuffering: true }));
-    a.addEventListener('playing', () => this._set({ isBuffering: false, isPlaying: true }));
+    a.addEventListener('playing', () => {
+      // A track that actually started clears the accumulated failure run.
+      this._failedTrackIds.clear();
+      this._handledErrorFor = null;
+      this._pendingFailureEcho = false;
+      this._currentLoadStarted = true;
+      this._set({ isBuffering: false, isPlaying: true, error: null });
+    });
     a.addEventListener('loadedmetadata', () => {
+      this._currentLoadStarted = true;
       if (Number.isFinite(a.duration)) this._set({ duration: a.duration });
     });
     a.addEventListener('timeupdate', () => {
@@ -108,8 +162,86 @@ class Player {
     a.addEventListener('error', () => {
       if (this.simulated) return;
       const track = this.state.currentTrack;
-      this._set({ isPlaying: false, isBuffering: false, error: { code: 'STREAM_FAILED', message: `Unable to play "${track?.title ?? 'track'}".` } });
+      if (!track) return;
+
+      // A failed load can emit `error` more than once; the extra events must not
+      // be attributed to the next track or they would consume the failure budget.
+      const expected = streamUrl(track.id);
+      if (this._handledErrorFor === expected) return;
+      if (a.currentSrc && a.currentSrc !== expected) return;
+
+      // Echo of the track we just skipped away from: re-issue this load instead
+      // of blaming it. A genuinely broken track will error again and be handled.
+      if (this._pendingFailureEcho && !this._currentLoadStarted) {
+        this._pendingFailureEcho = false;
+        this._loadTrack(this.state.currentIndex, { startFrom: 0 });
+        return;
+      }
+
+      this._handledErrorFor = expected;
+      this._handleTrackFailure('MEDIA_ERROR', describeMediaError(a.error));
     });
+  }
+
+  /* ---------------------------- failure recovery ---------------------------- */
+
+  /**
+   * A track failed to load or play. Previously this silently stopped the queue;
+   * now the error is surfaced and playback skips to the next track so one bad
+   * file cannot end the listening session (PRD §79/§131).
+   */
+  _handleTrackFailure(code, message) {
+    const track = this.state.currentTrack;
+    if (!track) return;
+
+    // A failed load reports itself twice (an `error` event *and* a rejected
+    // play() promise). One track, one report.
+    if (this._failedTrackIds.has(track.id)) return;
+
+    // Count distinct broken tracks, not raw events, so a duplicate error cannot
+    // exhaust the budget and stop a queue that still has playable tracks.
+    this._failedTrackIds.add(track.id);
+    const queueLength = this.state.queue.length;
+    const exhausted = this._failedTrackIds.size >= Math.max(1, queueLength);
+    const willSkip = this.state.autoAdvance && queueLength > 1 && !exhausted;
+
+    this._set({ isPlaying: false, isBuffering: false, error: { code, message, trackId: track.id } });
+    this._emitTo(this._errorListeners, { code, message, track, willSkip });
+
+    if (willSkip) {
+      this._pendingFailureEcho = true;
+      this._skipFailedTrack();
+    } else {
+      this._stopAtEnd();
+    }
+  }
+
+  /** Advances past a broken track without honouring "repeat one". */
+  _skipFailedTrack() {
+    const { queue, currentIndex } = this.state;
+    let nextIndex = currentIndex + 1;
+    if (nextIndex >= queue.length) {
+      if (this.state.repeatMode === 'off') {
+        this._stopAtEnd();
+        return;
+      }
+      nextIndex = 0;
+    }
+    this._loadTrack(nextIndex, { startFrom: 0 });
+  }
+
+  /** Stops playback and lets the UI explain why. */
+  _stopAtEnd() {
+    if (this.simulated) {
+      this._stopTimer();
+    } else {
+      // Actually halt the element — otherwise the state says "stopped" while
+      // audio keeps coming out of the speakers.
+      this.audio.pause();
+    }
+    this._set({ isPlaying: false, currentTime: this.state.duration });
+    this._setMediaPlaybackState('none');
+    this._emitTo(this._queueEndListeners, { reason: this.state.error ? 'error' : 'end', track: this.state.currentTrack });
   }
 
   _bindMediaSession() {
@@ -176,6 +308,8 @@ class Player {
   playQueue(tracks, startIndex = 0, { autoplay = true } = {}) {
     if (!tracks?.length) return;
     this._originalQueue = null;
+    this._failedTrackIds.clear();
+    this._handledErrorFor = null;
     const index = clamp(startIndex, 0, tracks.length - 1);
     this._set({ queue: tracks.slice(), currentIndex: index, shuffle: false });
     this._loadTrack(index, { autoplay });
@@ -210,7 +344,16 @@ class Player {
 
     this._set({ currentIndex: index, currentTrack: track, duration, currentTime: position, error: null, isBuffering: true });
 
+    this._handledErrorFor = null;
+    this._currentLoadStarted = false;
+    this._loadGeneration += 1;
     if (!this.simulated) {
+      // Reset the element before switching source. Without this, a failed load
+      // can emit a late `error` that would be attributed to the *next* track,
+      // inflating the failure budget and stopping a perfectly good queue.
+      this.audio.pause();
+      this.audio.removeAttribute('src');
+      this.audio.load();
       this.audio.src = streamUrl(track.id);
       this.audio.currentTime = position;
     }
@@ -252,15 +395,34 @@ class Player {
   /* ------------------------------- transport ------------------------------- */
 
   resume() {
-    if (!this.state.currentTrack) return;
+    const track = this.state.currentTrack;
+    if (!track) return;
     if (this.simulated) {
       this._lastTick = performance.now();
       this._startTimer();
       this._set({ isPlaying: true, isBuffering: false });
     } else {
-      this.audio.play().catch((err) => {
-        this._set({ isPlaying: false, error: { code: 'PLAYBACK_BLOCKED', message: err.message } });
-      });
+      const generation = this._loadGeneration;
+      const attempt = this.audio.play();
+      if (attempt?.catch) {
+        attempt.catch((error) => {
+          // Superseded by a newer load — not a real failure.
+          if (error?.name === 'AbortError') return;
+          if (this._loadGeneration !== generation) return;
+          if (this.state.currentTrack?.id !== track.id) return;
+
+          // Browser autoplay policy: needs a user gesture. Never skip tracks
+          // here, or we would run through the whole queue without playing.
+          if (error?.name === 'NotAllowedError') {
+            const message = 'The browser blocked playback. Press play to continue.';
+            this._set({ isPlaying: false, isBuffering: false, error: { code: 'AUTOPLAY_BLOCKED', message } });
+            this._emitTo(this._errorListeners, { code: 'AUTOPLAY_BLOCKED', message, track });
+            return;
+          }
+
+          this._handleTrackFailure('PLAY_FAILED', error?.message || 'Playback failed.');
+        });
+      }
     }
     this._setMediaPlaybackState('playing');
   }
@@ -285,6 +447,12 @@ class Player {
     const { queue, currentIndex, repeatMode } = this.state;
     if (!queue.length) return;
 
+    // Auto-advance is the "keep playing" switch; repeat one only applies then.
+    if (auto && !this.state.autoAdvance) {
+      this._stopAtEnd();
+      return;
+    }
+
     if (repeatMode === 'one' && auto) {
       this.seek(0);
       this.resume();
@@ -292,11 +460,10 @@ class Player {
     }
     let nextIndex = currentIndex + 1;
     if (nextIndex >= queue.length) {
+      // Manual "next" at the end wraps; auto-advance only wraps when looping.
       if (repeatMode === 'all' || !auto) nextIndex = 0;
       else {
-        if (this.simulated) this._stopTimer();
-        this._set({ isPlaying: false, currentTime: this.state.duration });
-        this._setMediaPlaybackState('none');
+        this._stopAtEnd();
         return;
       }
     }
@@ -375,11 +542,27 @@ class Player {
 
   /* -------------------------------- repeat --------------------------------- */
 
-  cycleRepeat() {
-    const next = REPEAT_MODES[(REPEAT_MODES.indexOf(this.state.repeatMode) + 1) % REPEAT_MODES.length];
+  /** Set the repeat mode explicitly (used by the repeat menu). */
+  setRepeatMode(mode) {
+    const next = REPEAT_MODES.includes(mode) ? mode : 'off';
     this._set({ repeatMode: next });
     persisted.write('repeat', next);
     return next;
+  }
+
+  cycleRepeat() {
+    return this.setRepeatMode(REPEAT_MODES[(REPEAT_MODES.indexOf(this.state.repeatMode) + 1) % REPEAT_MODES.length]);
+  }
+
+  /**
+   * "Keep playing": when enabled, finishing a track advances to the next one.
+   * When disabled, playback stops at the end of each track.
+   */
+  setAutoAdvance(enabled) {
+    const value = Boolean(enabled);
+    this._set({ autoAdvance: value });
+    persisted.write('autoAdvance', value);
+    return value;
   }
 
   /* --------------------------- queue manipulation -------------------------- */
@@ -481,7 +664,7 @@ class Player {
 
   _handleEnded() {
     this._flushPosition();
-    for (const fn of this._endedListeners) fn(this.state.currentTrack);
+    this._emitTo(this._endedListeners, this.state.currentTrack);
     this.next({ auto: true });
   }
 
